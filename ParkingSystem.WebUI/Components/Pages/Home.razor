@@ -1,14 +1,5 @@
 @page "/"
 @rendermode InteractiveServer
-@using ParkingSystem.Infrastructure.Services
-@using ParkingSystem.Domain.Enums
-@inject ToastService ToastService
-
-<button class="btn btn-primary" @onclick="ShowToast">Show Toast</button>
 
 @code {
-    private void ShowToast()
-    {
-        ToastService.ShowToast("This should now appear!", ToastLevel.Success);
-    }
 }
