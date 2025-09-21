@@ -1,0 +1,73 @@
+@using ParkingSystem.Domain.Enums
+@using ParkingSystem.Infrastructure.Services
+@implements IDisposable
+@inject ToastService ToastService
+
+<div class="toast-container position-fixed top-0 end-0 p-3">
+    <div class="toast @toastCssClass @(isVisible ? "show" : "")" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="toast-header">
+            <strong class="me-auto">@toastTitle</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close" @onclick="HideToast"></button>
+        </div>
+        <div class="toast-body">
+            @toastMessage
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool isVisible;
+    private string toastMessage = string.Empty;
+    private string toastTitle = string.Empty;
+    private string toastCssClass = string.Empty;
+    private CancellationTokenSource? _autoHideCts;
+
+    protected override void OnInitialized()
+    {
+        ToastService.OnShow += ShowToast;
+    }
+
+    private async void ShowToast(string message, ToastLevel level)
+    {
+        await InvokeAsync(async () =>
+        {
+            _autoHideCts?.Cancel();
+            _autoHideCts = new CancellationTokenSource();
+
+            toastMessage = message;
+            toastTitle = (level.ToString().ToLower() == "danger" ? "Fines" : level.ToString());
+            toastCssClass = $"bg-{level.ToString().ToLower()} text-white";
+            isVisible = true;
+
+            StateHasChanged();
+
+            try
+            {
+                await Task.Delay(5000, _autoHideCts.Token);
+
+                isVisible = false;
+                StateHasChanged();
+            }
+            catch (TaskCanceledException)
+            {
+            }
+        });
+    }
+
+    private void HideToast()
+    {
+        InvokeAsync(() =>
+        {
+            _autoHideCts?.Cancel();
+            isVisible = false;
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        ToastService.OnShow -= ShowToast;
+        _autoHideCts?.Cancel();
+        _autoHideCts?.Dispose();
+    }
+}

@@ -1,0 +1,29 @@
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Identity
+
+@inject NavigationManager NavigationManager
+@inject AntiforgeryStateProvider Antiforgery
+
+<AuthorizeView>
+    <Authorized>
+        <a href="Account/Manage" class="nav-link text-dark" title="Manage">Hello, @context.User.Identity?.Name!</a>
+        <form action="Account/Logout" method="post">
+            <AntiforgeryToken />
+            <input type="hidden" name="ReturnUrl" value="@currentUrl" />
+            <button type="submit" class="nav-link btn btn-link text-dark">Log out</button>
+        </form>
+    </Authorized>
+    <NotAuthorized>
+        <a href="Account/Register" class="nav-link text-dark">Register</a>
+        <a href="Account/Login" class="nav-link text-dark">Log in</a>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private string? currentUrl;
+
+    protected override void OnInitialized()
+    {
+        currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+    }
+}

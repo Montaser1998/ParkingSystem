@@ -1,0 +1,100 @@
+@page "/issue-fine"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using ParkingSystem.Application.Interfaces
+@using ParkingSystem.Domain.Entities
+@attribute [Authorize(Roles = "Security")]
+@rendermode InteractiveServer
+@inject IFineService FineService
+@inject IUnitOfWork UnitOfWork
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Issue Fine</PageTitle>
+
+<h3>Issue a Parking Fine</h3>
+
+<EditForm Model="@fineModel" OnValidSubmit="HandleIssueFine" FormName="IssueFineForm">
+    <DataAnnotationsValidator />
+    <div class="form-group mb-3">
+        <label for="slot">Parking Slot:</label>
+        <InputSelect id="slot" class="form-control" @bind-Value="fineModel.ParkingSlotId">
+            <option value="0">Select a slot...</option>
+            @if (parkingSlots != null)
+            {
+                @foreach (var slot in parkingSlots)
+                {
+                    <option value="@slot.Id">@slot.SlotNumber</option>
+                }
+            }
+        </InputSelect>
+        <ValidationMessage For="@(() => fineModel.ParkingSlotId)" />
+    </div>
+    <div class="form-group mb-3">
+        <label for="license">Vehicle License Plate:</label>
+        <InputText id="license" class="form-control" @bind-Value="fineModel.VehicleLicensePlate" />
+        <ValidationMessage For="@(() => fineModel.VehicleLicensePlate)" />
+    </div>
+    <div class="form-group mb-3">
+        <label for="reason">Reason:</label>
+        <InputText id="reason" class="form-control" @bind-Value="fineModel.Reason" />
+        <ValidationMessage For="@(() => fineModel.Reason)" />
+    </div>
+    <div class="form-group mb-3">
+        <label for="amount">Amount:</label>
+        <InputNumber id="amount" class="form-control" @bind-Value="fineModel.Amount" />
+        <ValidationMessage For="@(() => fineModel.Amount)" />
+    </div>
+
+    <button type="submit" class="btn btn-danger">Issue Fine</button>
+</EditForm>
+
+
+@code {
+    private FineModel fineModel = new();
+    private IEnumerable<ParkingSlots>? parkingSlots;
+    private Guid securityUserId;
+    private bool isProcessing = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        parkingSlots = await UnitOfWork.ParkingSlots.GetAllAsync();
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user.Identity is { IsAuthenticated: true })
+        {
+            securityUserId = Guid.Parse(user.FindFirst(c => c.Type.Contains("nameidentifier"))!.Value);
+        }
+    }
+
+    private async Task HandleIssueFine()
+    {
+        isProcessing = true;
+
+        // --- All the logic is now in this one service call ---
+        await FineService.CreateFineAndNotifyAsync(
+            fineModel.ParkingSlotId,
+            fineModel.VehicleLicensePlate,
+            fineModel.Reason,
+            fineModel.Amount,
+            securityUserId
+        );
+
+        // Reset the form for the next fine
+        // fineModel = new();
+        isProcessing = false;
+        StateHasChanged();
+    }
+
+    // A simple model class for form validation
+    public class FineModel
+    {
+        [System.ComponentModel.DataAnnotations.Range(1, int.MaxValue, ErrorMessage = "Please select a parking slot.")]
+        public int ParkingSlotId { get; set; }
+        [System.ComponentModel.DataAnnotations.Required]
+        public string VehicleLicensePlate { get; set; } = "";
+        [System.ComponentModel.DataAnnotations.Required]
+        public string Reason { get; set; } = "Parked without a valid booking.";
+        [System.ComponentModel.DataAnnotations.Range(1, 1000, ErrorMessage = "Amount must be between 1 and 1000.")]
+        public decimal Amount { get; set; } = 50;
+    }
+}

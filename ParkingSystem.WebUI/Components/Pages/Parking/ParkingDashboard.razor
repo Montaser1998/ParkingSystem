@@ -1,0 +1,77 @@
+@page "/parking"
+@using Microsoft.AspNetCore.Authorization
+@using ParkingSystem.Application.Interfaces
+@using ParkingSystem.Domain.Entities
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject IUnitOfWork UnitOfWork
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager NavigationManager
+
+<PageTitle>Parking Dashboard</PageTitle>
+
+<h3>Parking Dashboard</h3>
+
+@if (slots == null)
+{
+    <p><em>Loading parking slots...</em></p>
+}
+else
+{
+    <div class="parking-grid">
+        @foreach (var slot in slots)
+        {
+            // This logic now works reliably because Bookings are loaded correctly
+            var currentBooking = GetCurrentBooking(slot);
+            <div class="parking-slot @GetSlotClass(slot, currentBooking)">
+                <strong>@slot.SlotNumber</strong>
+                @if (currentBooking != null)
+                {
+                    <small>Booked until @currentBooking.EndTime.ToLocalTime().ToString("t")</small>
+                }
+                else
+                {
+                    <small>Available</small>
+                }
+                <button class="btn btn-primary btn-sm mt-2" @onclick="() => BookSlot(slot.Id)">Book/Extend</button>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private IEnumerable<ParkingSlots>? slots;
+    private Guid currentUserId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user.Identity is { IsAuthenticated: true })
+        {
+            currentUserId = Guid.Parse(user.FindFirst(c => c.Type.Contains("nameidentifier"))!.Value);
+
+            // *** THIS IS THE KEY CHANGE ***
+            // Use the new method to eager-load the Bookings collection for each slot
+            slots = await UnitOfWork.ParkingSlots.GetAllIncludingAsync(s => s.Bookings);
+        }
+    }
+
+    // This method correctly calculates the current booking status
+    private Bookings? GetCurrentBooking(ParkingSlots slot)
+    {
+        // We only care about paid bookings that haven't expired yet
+        return slot.Bookings.FirstOrDefault(b => b.EndTime > DateTime.UtcNow && b.IsPaid);
+    }
+
+    private string GetSlotClass(ParkingSlots slot, Bookings? booking)
+    {
+        if (booking == null) return "available";
+        return booking.UserId == currentUserId ? "booked-by-user" : "booked-by-other";
+    }
+
+    private void BookSlot(int slotId)
+    {
+        NavigationManager.NavigateTo($"/book/{slotId}");
+    }
+}
